@@ -19,7 +19,13 @@
     return PRODUCT_NAMES[Math.floor(Math.random() * PRODUCT_NAMES.length)];
   }
 
-  /* ── Estado ── */
+  /* Preço base do produto principal */
+  var BASE_PRICE = 10.00;
+
+  /* Estado dos orderbumps selecionados: Set de índices */
+  var selectedBumps = {};
+
+  /* ── Estado PIX ── */
   var pixText   = '';
   var pixId     = null;
   var pollingTO = null;
@@ -29,34 +35,58 @@
   function fmt(v) {
     return 'R$ ' + Number(v).toFixed(2).replace('.', ',');
   }
-  function getTotal() {
-    /* Tenta ler o total do DOM da Wiapy */
-    var el = document.querySelector('.checkout-total, .total-value, [class*="total"], .price-total');
-    if (el) {
-      var m = el.textContent.match(/([\d]+[,.][\d]{2})/);
-      if (m) return parseFloat(m[1].replace(',', '.'));
-    }
-    /* Fallback: soma preços dos order bumps ativos + produto principal */
-    var total = 0;
-    document.querySelectorAll('.final-price').forEach(function (el) {
-      if (el.closest('.orderbump-item') && el.closest('.orderbump-item').classList.contains('selected')) {
-        var m = el.textContent.match(/([\d]+[,.][\d]{2})/);
-        if (m) total += parseFloat(m[1].replace(',', '.'));
-      }
-    });
-    /* Produto principal — pega o primeiro preço visível grande */
-    var mainPrice = document.querySelector('.checkout-price, .product-price, .main-price, [class*="checkout-value"]');
-    if (mainPrice) {
-      var m2 = mainPrice.textContent.match(/([\d]+[,.][\d]{2})/);
-      if (m2) total += parseFloat(m2[1].replace(',', '.'));
-    }
-    return total || 10.00;
+
+  function parseBRL(str) {
+    var m = String(str).replace(/\s/g, '').match(/([\d]+[,.][\d]{2})/);
+    return m ? parseFloat(m[1].replace(',', '.')) : 0;
   }
 
-  /* ── Injeção de estilos do modal PIX ── */
+  function getTotal() {
+    var total = BASE_PRICE;
+    Object.keys(selectedBumps).forEach(function (idx) {
+      total += selectedBumps[idx];
+    });
+    return Math.round(total * 100) / 100;
+  }
+
+  /* ── Atualiza exibição do total no DOM ── */
+  function atualizarTotalDOM() {
+    var total = getTotal();
+    var fmtd  = fmt(total);
+
+    /* .price-value.highlight-green (resumo) */
+    document.querySelectorAll('.price-value.highlight-green, .price-value').forEach(function (el) {
+      if (/R\$/.test(el.textContent)) el.textContent = fmtd;
+    });
+
+    /* .payment-summary-box__text (banner "À VISTA NO PIX") */
+    document.querySelectorAll('.payment-summary-box__text').forEach(function (el) {
+      el.textContent = fmtd + ' À VISTA NO PIX';
+    });
+
+    /* .price-row (linha Total no resumo) */
+    document.querySelectorAll('.price-row').forEach(function (row) {
+      var title = row.querySelector('.price-title');
+      var value = row.querySelector('.price-value');
+      if (title && /total/i.test(title.textContent) && value) {
+        value.textContent = fmtd;
+      }
+    });
+  }
+
+  /* ── Injeção de estilos ── */
   function injectCSS() {
     var s = document.createElement('style');
     s.textContent = [
+      /* Remove abas Cartão e Google Pay mesmo se o Nuxt re-renderizar */
+      '.payment-tab:not(.pix-only-keep) { display: none !important; }',
+
+      /* Checkbox visual do orderbump selecionado */
+      '.orderbump-card.dc-selected .orderbump-checkbox::after { content:"✓"; display:flex; align-items:center; justify-content:center; width:20px; height:20px; background:#7c3aed; color:#fff; border-radius:4px; font-weight:700; font-size:13px; }',
+      '.orderbump-card.dc-selected { border: 2px solid #7c3aed !important; background: #faf5ff !important; }',
+      '.orderbump-card.dc-selected .btn-add-offer { background: #7c3aed !important; color: #fff !important; border-color: #7c3aed !important; }',
+
+      /* Modal overlay */
       ':root{--dc:#7c3aed}',
       '.dc-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9998;display:none}',
       '.dc-overlay.on{display:block}',
@@ -103,7 +133,7 @@
     var div = document.createElement('div');
     div.innerHTML = [
       '<div class="dc-overlay" id="dc-overlay"></div>',
-      '<div class="dc-modal-wrap on" id="dc-modal-wrap" style="display:none">',
+      '<div class="dc-modal-wrap" id="dc-modal-wrap" style="display:none">',
       '  <div class="dc-modal">',
       '    <button class="dc-close" onclick="dcFechar()">✕</button>',
       '    <div id="dc-pix-stage">',
@@ -151,6 +181,80 @@
     document.getElementById('dc-overlay').addEventListener('click', window.dcFechar);
   }
 
+  /* ── Orderbumps ── */
+  function bindOrderbumps() {
+    /* Aguarda as cards existirem no DOM (Nuxt renderiza async) */
+    var attempts = 0;
+    var poll = setInterval(function () {
+      var cards = document.querySelectorAll('.orderbump-card');
+      if (!cards.length && attempts++ < 40) return;
+      clearInterval(poll);
+
+      cards.forEach(function (card, idx) {
+        /* Extrai o preço do orderbump */
+        var priceEl = card.querySelector('.price-green, .final-price strong');
+        var price   = priceEl ? parseBRL(priceEl.textContent) : 0;
+
+        var btn = card.querySelector('.btn-add-offer');
+        if (!btn || !price) return;
+
+        btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+
+          var isSelected = card.classList.contains('dc-selected');
+
+          if (isSelected) {
+            /* Remove orderbump */
+            card.classList.remove('dc-selected');
+            delete selectedBumps[idx];
+            btn.textContent = 'Adicionar oferta';
+          } else {
+            /* Adiciona orderbump */
+            card.classList.add('dc-selected');
+            selectedBumps[idx] = price;
+            btn.textContent = '✓ Adicionado — Remover';
+          }
+
+          atualizarTotalDOM();
+        }, true);
+      });
+
+      console.log('[Dice] ' + cards.length + ' orderbumps vinculados ✓');
+    }, 300);
+  }
+
+  /* ── Força PIX como única aba ── */
+  function forcarAbaPixUnica() {
+    /* Aguarda Nuxt renderizar os tabs */
+    var attempts = 0;
+    var poll = setInterval(function () {
+      var allTabs = document.querySelectorAll('.payment-tab');
+      if (!allTabs.length && attempts++ < 40) return;
+      clearInterval(poll);
+
+      allTabs.forEach(function (tab) {
+        var txt = tab.textContent.trim().toLowerCase();
+        if (txt === 'pix') {
+          tab.classList.add('pix-only-keep', 'active');
+        } else {
+          tab.style.display = 'none';
+        }
+      });
+
+      /* Observer para esconder qualquer tab que o Nuxt re-injete */
+      var tabsContainer = document.querySelector('.payment-tabs');
+      if (tabsContainer) {
+        new MutationObserver(function () {
+          tabsContainer.querySelectorAll('.payment-tab').forEach(function (tab) {
+            var txt = tab.textContent.trim().toLowerCase();
+            if (txt !== 'pix') tab.style.display = 'none';
+          });
+        }).observe(tabsContainer, { childList: true, subtree: true });
+      }
+    }, 300);
+  }
+
   /* ── Abrir/fechar modal ── */
   window.dcAbrir = function (total) {
     var amEl = document.getElementById('dc-amount');
@@ -158,7 +262,7 @@
     document.getElementById('dc-loader').style.display  = 'flex';
     document.getElementById('dc-qr-wrap').style.display = 'none';
     document.getElementById('dc-err').style.display     = 'none';
-    document.getElementById('dc-pix-stage').style.display = 'block';
+    document.getElementById('dc-pix-stage').style.display  = 'block';
     document.getElementById('dc-done-stage').style.display = 'none';
     document.getElementById('dc-overlay').classList.add('on');
     document.getElementById('dc-modal-wrap').style.display = 'flex';
@@ -194,19 +298,15 @@
           new QRCode(qrEl, { text: pixText, width: 200, height: 200, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.L });
         }
       }
-      var codeEl = document.getElementById('dc-code');
-      if (codeEl) codeEl.textContent = pixText;
-
+      document.getElementById('dc-code').textContent    = pixText;
       document.getElementById('dc-qr-wrap').style.display = 'block';
       dcStartTimer();
       dcIniciarPolling(pixId);
     })
     .catch(function (err) {
       document.getElementById('dc-loader').style.display = 'none';
-      var errEl  = document.getElementById('dc-err');
-      var errMsg = document.getElementById('dc-err-msg');
-      if (errMsg) errMsg.textContent = err.message || 'Erro ao gerar PIX.';
-      if (errEl) errEl.style.display = 'block';
+      document.getElementById('dc-err-msg').textContent  = err.message || 'Erro ao gerar PIX.';
+      document.getElementById('dc-err').style.display    = 'block';
     });
   }
 
@@ -227,7 +327,7 @@
           if (d.status === 'PAID' || d.status === 'APPROVED') {
             dcPararPolling();
             if (timerTO) clearTimeout(timerTO);
-            document.getElementById('dc-pix-stage').style.display = 'none';
+            document.getElementById('dc-pix-stage').style.display  = 'none';
             document.getElementById('dc-done-stage').style.display = 'block';
           } else {
             pollingTO = setTimeout(poll, 4000);
@@ -273,24 +373,19 @@
     })();
   }
 
-  /* ── Interceptar submit do checkout Wiapy ── */
+  /* ── Interceptar submit do checkout ── */
   function interceptSubmit() {
-    /* Aguarda o botão existir (Nuxt renderiza async) */
     var attempts = 0;
     var poll = setInterval(function () {
       var btn = document.querySelector('.btn-submit');
-      if (!btn || attempts++ > 60) { clearInterval(poll); return; }
+      if (!btn && attempts++ < 60) return;
       clearInterval(poll);
+      if (!btn) return;
 
       btn.addEventListener('click', function (e) {
-        /* Verifica se o tab ativo é PIX */
-        var activeTab = document.querySelector('.payment-tab.active');
-        if (!activeTab || activeTab.textContent.trim().toLowerCase().indexOf('pix') === -1) return;
-
         e.preventDefault();
         e.stopImmediatePropagation();
 
-        /* Coleta dados do form */
         var nome  = (document.getElementById('name')  || {}).value || '';
         var email = (document.getElementById('email') || {}).value || '';
         var cpf   = (document.getElementById('taxId') || {}).value || '';
@@ -302,7 +397,6 @@
         }
 
         var total = getTotal();
-
         var dados = {
           nome:         nome,
           email:        email,
@@ -317,19 +411,15 @@
         dcGerarPix(dados);
       }, true);
 
-      /* Também bloqueia submit via keyboard/form */
       var form = btn.closest('form');
       if (form) {
         form.addEventListener('submit', function (e) {
-          var activeTab = document.querySelector('.payment-tab.active');
-          if (activeTab && activeTab.textContent.trim().toLowerCase().indexOf('pix') !== -1) {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-          }
+          e.preventDefault();
+          e.stopImmediatePropagation();
         }, true);
       }
 
-      console.log('[Dice] Checkout interceptado ✓');
+      console.log('[Dice] Submit interceptado ✓');
     }, 500);
   }
 
@@ -337,6 +427,8 @@
   function init() {
     injectCSS();
     injectHTML();
+    forcarAbaPixUnica();
+    bindOrderbumps();
     interceptSubmit();
   }
 
