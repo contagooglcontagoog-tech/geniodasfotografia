@@ -1,8 +1,8 @@
 const axios = require('axios');
 
 const DICE_URL      = 'https://dev.use-dice.com';
-const CLIENT_ID     = process.env.DICE_CLIENT_ID     || '';
-const CLIENT_SECRET = process.env.DICE_CLIENT_SECRET || '';
+const CLIENT_ID     = process.env.DICE_CLIENT_ID     || 'dice_live_498b702b2fdf289abb71546775e709e1';
+const CLIENT_SECRET = process.env.DICE_CLIENT_SECRET || 'dicesk_live_b6205c24540327108c91ce08b05dfc8f84523cbaf9f39be3';
 
 let _token  = null;
 let _expiry = 0;
