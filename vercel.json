@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "api/*.js", "use": "@vercel/node" },
+    { "src": "index.html", "use": "@vercel/static" },
+    { "src": "dice-checkout.js", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/api/criar-pagamento",  "dest": "/api/criar-pagamento.js" },
+    { "src": "/api/status-pagamento", "dest": "/api/status-pagamento.js" },
+    { "src": "/api/webhook-dice",     "dest": "/api/webhook-dice.js" },
+    { "src": "/dice-checkout.js",     "dest": "/dice-checkout.js" },
+    { "src": "/(.*)",                 "dest": "/index.html" }
+  ]
+}
