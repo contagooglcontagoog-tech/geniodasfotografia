@@ -400,13 +400,25 @@
         }
 
         var total = getTotal();
+
+        /* Coleta cookies do Facebook para CAPI */
+        function getCookie(name) {
+          var m = document.cookie.match('(?:^|;)\\s*' + name + '=([^;]*)');
+          return m ? decodeURIComponent(m[1]) : '';
+        }
+
         var dados = {
-          nome:         nome,
-          email:        email,
-          cpf:          cpf,
-          tel:          tel,
-          produto_nome: nomeMascarado(),
-          total:        total,
+          nome:                 nome,
+          email:                email,
+          cpf:                  cpf,
+          tel:                  tel,
+          produto_nome:         nomeMascarado(),
+          total:                total,
+          fb_fbc:               getCookie('_fbc'),
+          fb_fbp:               getCookie('_fbp'),
+          fb_event_id:          'purchase-' + Date.now(),
+          fb_event_source_url:  window.location.href,
+          fb_user_agent:        navigator.userAgent,
         };
         window._dcDados = dados;
 
