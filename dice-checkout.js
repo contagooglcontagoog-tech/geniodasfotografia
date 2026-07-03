@@ -426,6 +426,28 @@
     }, 500);
   }
 
+  /* ── Cronômetro de oferta ── */
+  function initCronometro() {
+    var minEl = document.getElementById('minute');
+    var secEl = document.getElementById('second');
+    if (!minEl || !secEl) return;
+
+    /* Lê valor inicial do DOM ou usa 15:00 */
+    var mins = parseInt(minEl.textContent, 10) || 15;
+    var secs = parseInt(secEl.textContent, 10) || 0;
+    var total = mins * 60 + secs;
+
+    function tick() {
+      if (total <= 0) { total = 0; }
+      var m = Math.floor(total / 60);
+      var s = total % 60;
+      minEl.textContent = String(m).padStart(2, '0');
+      secEl.textContent = String(s).padStart(2, '0');
+      if (total > 0) { total--; setTimeout(tick, 1000); }
+    }
+    tick();
+  }
+
   /* ── Init ── */
   function init() {
     injectCSS();
@@ -433,6 +455,7 @@
     forcarAbaPixUnica();
     bindOrderbumps();
     interceptSubmit();
+    initCronometro();
   }
 
   if (document.readyState === 'loading') {
