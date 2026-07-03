@@ -81,6 +81,9 @@
       /* Remove abas Cartão e Google Pay mesmo se o Nuxt re-renderizar */
       '.payment-tab:not(.pix-only-keep) { display: none !important; }',
 
+      /* Remove branding Wiapy */
+      '.technology-brand, .wiapy-logo, a[href="https://wiapy.com"] { display: none !important; }',
+
       /* Checkbox visual do orderbump selecionado */
       '.orderbump-card.dc-selected .orderbump-checkbox::after { content:"✓"; display:flex; align-items:center; justify-content:center; width:20px; height:20px; background:#7c3aed; color:#fff; border-radius:4px; font-weight:700; font-size:13px; }',
       '.orderbump-card.dc-selected { border: 2px solid #7c3aed !important; background: #faf5ff !important; }',
